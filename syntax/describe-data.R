@@ -44,36 +44,38 @@ source("./syntax/customised function/describe-data-numeric.R")
 table_descriptive_numeric <-
   data_for_descriptive_analysis %>% 
   # create descriptive summary for time-constant numeric variables
-  select_if(is.numeric) %>% 
-  select(-case_id) %>% 
-  map_df( ~ describe_data_numeric(.x)) %>% 
+  map( ~ .x %>% select_if(is.numeric)) %>% 
+  map( ~ .x %>% select(-case_id)) %>% 
+  map_df( ~ .x %>% map_df( ~ describe_data_numeric(.x), .id = "variable"),
+          .id = "impute_id") %>% 
+  group_by(variable) %>% 
+  summarise_if(is.numeric,  ~ mean(.x)) %>% 
   # append descriptive summary for two time-varying numeric variables:
   # variable 1 appended: word count in the question stem
-  add_row(data_meta %>% select(word_count) %>% map_df(~ describe_data_numeric(.x))) %>% 
+  add_row(data_meta %>% 
+            select(word_count) %>% 
+            map_df(~ describe_data_numeric(.x)) %>% 
+            mutate(variable = "word_count", .before = 1)) %>% 
   # variable 2 appended: item nonresponse rate
   add_row(data_long %>% 
             group_by(case_id) %>% 
             summarise(item_nonresponse_rate_max = max(item_missing_percent)) %>% 
             pull(item_nonresponse_rate_max) %>%
-            describe_data_numeric()
-          ) %>% 
-  select(-na_n) %>% 
+            describe_data_numeric() %>% 
+            mutate(variable = "item_missing_percent", .before = 1)) %>% 
   # round all numeric columns to the 2nd decimal
-  mutate_all(~ round(., 2)) %>% 
-  # add a column for the variable name
-  add_column(variable = c(data_for_descriptive_analysis %>% select_if(is.numeric) %>% select(-case_id) %>% colnames(),
-                          data_meta %>% select(word_count) %>% colnames(),
-                          data_long %>% select(item_missing_percent) %>% colnames()),
-             .before = 1)
+  mutate_if(is.numeric, ~ round(., 2)) %>% 
+  # remove un-needed column
+  select(-na_n)
 
 
 # ====== 2.2 format descriptive table ======
 table_descriptive_numeric <- 
   table_descriptive_numeric %>%
   # format the value in the column "variable" publishable
-  mutate(variable = c("Number of questions seen",
+  mutate(variable = c("Age", 
                       "Survey duration (min)", 
-                      "Age", 
+                      "Number of questions seen",
                       "Word count of question stems",
                       "Item nonresponse rate")) %>%
   # add two rows to distinguish time-varying/constant variables
@@ -117,20 +119,24 @@ table_descriptive_numeric
 # ====== 3.1 create descriptive table ======
 table_descriptive_categorical_respondent_level <-
   data_for_descriptive_analysis %>%
-  select_if(is.factor) %>%
-  map_df( ~ table(.x, useNA = "always") %>% as_tibble(),
-          .id = "variable") %>% 
-  rename(category = ".x") %>% 
-  group_by(variable) %>% 
+  map( ~ .x %>% select_if(is.factor)) %>% 
+  map_df( ~ .x %>% map_df( ~ table(., useNA = "always") %>% as_tibble(),
+                           .id = "variable"),
+          .id = "impute_id") %>% 
+  rename(category = ".") %>% 
+  group_by(impute_id, variable) %>% 
   mutate(prop = n / sum(n) * 100) %>% 
-  ungroup() %>% 
+  group_by(variable, category) %>% 
+  summarise_at(vars(n, prop), ~ mean(.x)) %>% 
+  ungroup() %>%
   # remove the NA category if it does not exist in the variable
   filter(!(category %in% NA & n == 0)) %>% 
   # round the column of percentage to the second decimal point
-  mutate(prop = round(prop, 2)) %>% 
+  mutate(prop = round(prop, 2), 
+         n = round(n, 0)) %>% 
   mutate(category = ifelse(category %in% NA, "Missing", category)) %>% 
   mutate(variable = str_remove(variable, "_recode")) %>%
-  mutate(variable = case_when(variable == "grouped" ~ "Filer question format",
+  mutate(variable = case_when(variable == "grouped" ~ "Filter question format",
                               variable == "number_of_connection" ~ "Number of sessions",
                               variable == "device" ~ "Responding device",
                               variable == "married" ~ "Marital status",
@@ -303,11 +309,12 @@ walk2(
 ggsave(plot = plot_hazard_time,
        filename = "plot_hazard_vs_time.png",
        path = "./plot",
-       width = 18, height = 10, units = "cm")
+       dpi = 300)
+       # width = 18, height = 10, units = "cm")
 
 ggsave(plot = plot_survival_time_by_filter_format$plot,
        filename = "plot_survival_time_by_filter_format.png",
        path = "./plot",
-       width = 18, height = 10, units = "cm")
-
+       dpi = 300)
+       # width = 18, height = 10, units = "cm")
 

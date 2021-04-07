@@ -33,9 +33,7 @@
 #   14.1 create data for kaplan meier plot
 #   14.2 create data for description
 #
-# 15. create data for modelling
-#
-# 16. export data
+# 15. export data
 
 
 
@@ -458,27 +456,11 @@ data_for_descriptive_analysis %>% glimpse()
 
 
 
-# ============ 15. create data for modelling =============
-# put all variables into one dataset for modelling
-data_for_model <-
-  data_long %>%
-  group_by(case_id) %>%
-  # merge the data of question characteristics (time-varying) into the long data
-  left_join(data_meta, by = "question_name") %>%
-  # merge the data of demographics (time-constant) into the above data
-  left_join(data_for_descriptive_analysis %>% select(-question_sequence), 
-            by = "case_id") %>% 
-  ungroup()
-
-
-
-
-# ============ 16. export data =============
-save(data_meta,
+# ============ 15. export data =============
+save(data_interim,
+     data_meta,
      data_long, 
      data_for_km_plot,
      data_for_descriptive_analysis,
-     data_for_model,
-     file = "./data/derived/data-for-analysis.RData")
-
+     file = "./data/derived/data-for-imputation.RData")
 
